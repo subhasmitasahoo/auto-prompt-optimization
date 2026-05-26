@@ -1,0 +1,146 @@
+
+============================================================
+  AUTO PROMPT OPTIMIZATION — Customer Support Classifier
+  [SIMULATION MODE — mock LLM, deterministic seed 42]
+============================================================
+
+📌 Seed prompt:
+# Task
+Categorize the customer support ticket.
+
+# Output format
+Classify into one of these classes: 'Technical Support', 'Billing', 'General Information', 'Complaint and Escalations', 'Feedback and Suggestions'.
+Respond with ONLY the class name, nothing else.
+
+📊 Seed accuracy on 30-ticket train sample: 90.0%  (3 errors)
+
+  Seed prompt misclassifications:
+    ✗  [General Information] → [Feedback and Suggestions]  "Can you tell me more about your enterprise plan features?"
+    ✗  [Feedback and Suggestions] → [General Information]  "Your onboarding process was smooth, but a video tutorial would be help…"
+    ✗  [Feedback and Suggestions] → [General Information]  "Consider adding bulk upload functionality - it would save us a lot of …"
+
+────────────────────────────────────────────────────────────
+  Round 1 / 3
+────────────────────────────────────────────────────────────
+
+  ▸ Beam prompt #1  (train acc = 90.0%)
+    🔍 Requesting 3 gradient feedbacks…
+    ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
+      Gradient 1, candidate 1: train acc = 96.7%
+      Gradient 1, candidate 2: train acc = 96.7%
+      Gradient 2, candidate 1: train acc = 90.0%
+      Gradient 2, candidate 2: train acc = 90.0%
+      Gradient 3, candidate 1: train acc = 86.7%
+      Gradient 3, candidate 2: train acc = 96.7%
+
+  🏆 Best prompt this round — train acc: 96.7%
+  Preview: # Task…
+
+────────────────────────────────────────────────────────────
+  Round 2 / 3
+────────────────────────────────────────────────────────────
+
+  ▸ Beam prompt #1  (train acc = 96.7%)
+    🔍 Requesting 3 gradient feedbacks…
+    ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
+      Gradient 1, candidate 1: train acc = 93.3%
+      Gradient 1, candidate 2: train acc = 96.7%
+      Gradient 2, candidate 1: train acc = 93.3%
+      Gradient 2, candidate 2: train acc = 90.0%
+      Gradient 3, candidate 1: train acc = 96.7%
+      Gradient 3, candidate 2: train acc = 100.0%
+
+  ▸ Beam prompt #2  (train acc = 96.7%)
+    🔍 Requesting 3 gradient feedbacks…
+    ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
+      Gradient 1, candidate 1: train acc = 93.3%
+      Gradient 1, candidate 2: train acc = 93.3%
+      Gradient 2, candidate 1: train acc = 100.0%
+      Gradient 2, candidate 2: train acc = 100.0%
+      Gradient 3, candidate 1: train acc = 93.3%
+      Gradient 3, candidate 2: train acc = 93.3%
+
+  ▸ Beam prompt #3  (train acc = 96.7%)
+    ✅ No errors — skipping gradient step.
+
+  🏆 Best prompt this round — train acc: 100.0%
+  Preview: # Task…
+
+────────────────────────────────────────────────────────────
+  Round 3 / 3
+────────────────────────────────────────────────────────────
+
+  ▸ Beam prompt #1  (train acc = 100.0%)
+    🔍 Requesting 3 gradient feedbacks…
+    ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
+      Gradient 1, candidate 1: train acc = 100.0%
+      Gradient 1, candidate 2: train acc = 100.0%
+      Gradient 2, candidate 1: train acc = 100.0%
+      Gradient 2, candidate 2: train acc = 96.7%
+      Gradient 3, candidate 1: train acc = 100.0%
+      Gradient 3, candidate 2: train acc = 96.7%
+
+  ▸ Beam prompt #2  (train acc = 96.7%)
+    🔍 Requesting 3 gradient feedbacks…
+    ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
+      Gradient 1, candidate 1: train acc = 96.7%
+      Gradient 1, candidate 2: train acc = 96.7%
+      Gradient 2, candidate 1: train acc = 100.0%
+      Gradient 2, candidate 2: train acc = 100.0%
+      Gradient 3, candidate 1: train acc = 93.3%
+      Gradient 3, candidate 2: train acc = 100.0%
+
+  ▸ Beam prompt #3  (train acc = 96.7%)
+    🔍 Requesting 3 gradient feedbacks…
+    ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
+      Gradient 1, candidate 1: train acc = 100.0%
+      Gradient 1, candidate 2: train acc = 96.7%
+      Gradient 2, candidate 1: train acc = 100.0%
+      Gradient 2, candidate 2: train acc = 100.0%
+      Gradient 3, candidate 1: train acc = 96.7%
+      Gradient 3, candidate 2: train acc = 100.0%
+
+  🏆 Best prompt this round — train acc: 100.0%
+  Preview: # Task…
+
+============================================================
+  OPTIMIZATION COMPLETE
+============================================================
+
+🎯 Final optimized prompt:
+
+# Task
+Route the following customer support ticket to the correct team.
+
+# Teams and what they handle
+| Team | Handle when... |
+|------|---------------|
+| Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+| Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+| General Information | Factual questions about product features, policies, hours, plans |
+| Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+| Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+
+# Key distinctions
+- A billing system bug → **Billing** (not Technical Support)
+- A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+- "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+- "How does X work?" → **General Information** (not Feedback and Suggestions)
+
+Respond with ONLY the team name (class name) from the table above.
+
+────────────────────────────────────────────────────────────
+📊 Final train accuracy : 100.0%
+📊 Final eval  accuracy : 100.0%  (0 errors on 15 held-out tickets)
+
+  🎉 Zero errors on the held-out eval set!
+
+────────────────────────────────────────────────────────────
+  Accuracy progression:
+    Seed  : 90.0%
+    Round 1 : 96.7%
+    Round 2 : 100.0%
+    Round 3 : 100.0%
+    Eval  : 100.0%  (held-out)
+────────────────────────────────────────────────────────────
+
