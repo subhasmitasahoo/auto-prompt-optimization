@@ -328,14 +328,26 @@ def run_simulation():
 
                 print(f"    🔍 Requesting 3 gradient feedbacks…")
                 gradients = opt_mod.get_gradients(beam_prompt, errors, num_feedbacks=3)
-                print(f"    ✏️  Generating {len(gradients) * 2} candidate prompt(s) (2 per gradient)…")
+
+                # ── Print every gradient string ──────────────────────────────
+                for g_idx, grad in enumerate(gradients):
+                    print(f"\n    ┌─ Gradient {g_idx+1} ─────────────────────────────────")
+                    for line in grad.splitlines():
+                        print(f"    │  {line}")
+                    print(f"    └────────────────────────────────────────────────────")
+
+                print(f"\n    ✏️  Generating {len(gradients) * 2} candidate prompt(s) (2 per gradient)…")
 
                 for g_idx, grad in enumerate(gradients):
                     new_prompts = opt_mod.generate_new_prompts(beam_prompt, errors, grad, 2)
                     for p_idx, np_ in enumerate(new_prompts):
                         cand_acc, _ = opt_mod.evaluate(np_, train_sample)
                         candidates.append((cand_acc, np_))
-                        print(f"      Gradient {g_idx+1}, candidate {p_idx+1}: train acc = {cand_acc:.1%}")
+                        flag = " ⭐" if cand_acc == 1.0 else (" ⚠️" if cand_acc < acc0 else "")
+                        print(f"\n      ── Gradient {g_idx+1} · Candidate {p_idx+1}  (train acc = {cand_acc:.1%}{flag}) ──")
+                        for line in np_.splitlines():
+                            print(f"         {line}")
+                        print()
 
             # Keep top-3 unique
             seen, unique = set(), []
