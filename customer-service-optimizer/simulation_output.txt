@@ -25,13 +25,165 @@ Respond with ONLY the class name, nothing else.
 
   ▸ Beam prompt #1  (train acc = 90.0%)
     🔍 Requesting 3 gradient feedbacks…
+
+    ┌─ Gradient 1 ─────────────────────────────────
+    │  it treats all polite, positive messages as Feedback and Suggestions, but messages asking about features or plans are General Information requests even if they're phrased positively.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 2 ─────────────────────────────────
+    │  it does not distinguish between tickets that contain both technical symptoms AND strong frustration language — those are Complaint and Escalations, not Technical Support, because the primary intent is escalation not debugging.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 3 ─────────────────────────────────
+    │  it confuses General Information queries with Feedback and Suggestions when users phrase questions as implicit suggestions (e.g. 'Can you add X?'). Feedback implies the user is offering an opinion or improvement idea, while General Information is a neutral factual query.
+    └────────────────────────────────────────────────────
+
     ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
-      Gradient 1, candidate 1: train acc = 96.7%
-      Gradient 1, candidate 2: train acc = 96.7%
-      Gradient 2, candidate 1: train acc = 90.0%
-      Gradient 2, candidate 2: train acc = 90.0%
-      Gradient 3, candidate 1: train acc = 86.7%
-      Gradient 3, candidate 2: train acc = 96.7%
+
+      ── Gradient 1 · Candidate 1  (train acc = 96.7%) ──
+         # Task
+         Categorize the customer support ticket into exactly one class.
+         
+         # Class definitions
+         - **Technical Support**: The customer reports a software bug, error message,
+           integration failure, performance problem, or configuration issue that requires
+           the engineering or technical team to investigate and fix.
+         - **Billing**: Anything related to charges, invoices, refunds, payment methods,
+           subscription changes, pricing, or financial discrepancies — even if a payment
+           system has a technical glitch.
+         - **General Information**: A neutral factual question about how the product works,
+           what features exist, what plans are available, or what the company's policies are.
+           The customer is seeking information, not reporting a problem or offering an opinion.
+         - **Complaint and Escalations**: The customer expresses strong dissatisfaction,
+           demands management contact, mentions legal action, references repeated failures,
+           or threatens to cancel/leave. These often contain technical or billing details
+           but the primary intent is escalation.
+         - **Feedback and Suggestions**: The customer shares an opinion, idea, or
+           improvement request. This includes both praise and constructive suggestions.
+         
+         # Output format
+         Respond with ONLY the class name, nothing else.
+
+
+      ── Gradient 1 · Candidate 2  (train acc = 96.7%) ──
+         # Task
+         You are a customer support ticket router. Assign each ticket to the single
+         most appropriate class below.
+         
+         # Routing rules
+         1. If the ticket reports a broken feature, error, or technical malfunction → **Technical Support**
+         2. If the ticket is about money: charges, invoices, refunds, payment, pricing → **Billing**
+            (even if a billing system has a bug, route to Billing not Technical Support)
+         3. If the ticket asks a neutral question about the product, features, or policies → **General Information**
+         4. If the ticket contains threats, demands for management, legal language, or expresses
+            severe dissatisfaction after repeated failures → **Complaint and Escalations**
+            (prioritise this over Technical Support if BOTH apply)
+         5. If the ticket praises the product, suggests an improvement, or requests a new feature → **Feedback and Suggestions**
+            (distinguish from General Information: suggestions are opinions, not factual queries)
+         
+         # Output format
+         Respond with ONLY the class name, nothing else.
+
+
+      ── Gradient 2 · Candidate 1  (train acc = 90.0%) ──
+         # Task
+         Classify the customer support ticket into one of five categories.
+         
+         # Categories
+         **Technical Support** — Bug reports, crashes, login failures, sync errors,
+         slow performance, integration problems, API errors. The user needs a technical fix.
+         
+         **Billing** — Duplicate charges, refund requests, invoice questions, payment
+         method updates, subscription changes, pricing disputes, missing discounts.
+         Route here even when the payment processing itself has a technical error.
+         
+         **General Information** — Questions about business hours, shipping times,
+         plan features, file format support, compliance certifications. Neutral
+         information-seeking; no problem to fix and no opinion offered.
+         
+         **Complaint and Escalations** — Tickets with escalation signals: demands to
+         speak to a manager, mentions of legal action or consumer protection bodies,
+         SLA breach references, expressions of intent to cancel, or documentation of
+         financial losses. These may also describe technical problems but escalation
+         intent takes precedence.
+         
+         **Feedback and Suggestions** — Feature requests, UI improvement ideas,
+         compliments, bug suggestions, praise for specific team members. The customer
+         is offering an opinion or idea, not requesting resolution of a problem.
+         
+         # Decision tie-breaker
+         When a ticket could fit two classes, choose the one whose team would own
+         the next action (e.g. a frustrated billing dispute → Billing, a repeated
+         escalating technical failure → Complaint and Escalations).
+         
+         Respond with ONLY the class name.
+
+
+      ── Gradient 2 · Candidate 2  (train acc = 90.0%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 1  (train acc = 86.7% ⚠️) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 2  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
 
   🏆 Best prompt this round — train acc: 96.7%
   Preview: # Task…
@@ -42,23 +194,301 @@ Respond with ONLY the class name, nothing else.
 
   ▸ Beam prompt #1  (train acc = 96.7%)
     🔍 Requesting 3 gradient feedbacks…
+
+    ┌─ Gradient 1 ─────────────────────────────────
+    │  it does not handle complex enterprise tickets where multiple issues co-occur. The primary classification should follow the ticket's opening demand/complaint, not the longest technical paragraph.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 2 ─────────────────────────────────
+    │  it confuses General Information queries with Feedback and Suggestions when users phrase questions as implicit suggestions (e.g. 'Can you add X?'). Feedback implies the user is offering an opinion or improvement idea, while General Information is a neutral factual query.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 3 ─────────────────────────────────
+    │  it does not distinguish between tickets that contain both technical symptoms AND strong frustration language — those are Complaint and Escalations, not Technical Support, because the primary intent is escalation not debugging.
+    └────────────────────────────────────────────────────
+
     ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
-      Gradient 1, candidate 1: train acc = 93.3%
-      Gradient 1, candidate 2: train acc = 96.7%
-      Gradient 2, candidate 1: train acc = 93.3%
-      Gradient 2, candidate 2: train acc = 90.0%
-      Gradient 3, candidate 1: train acc = 96.7%
-      Gradient 3, candidate 2: train acc = 100.0%
+
+      ── Gradient 1 · Candidate 1  (train acc = 93.3%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 1 · Candidate 2  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 1  (train acc = 93.3%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 2  (train acc = 90.0%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 1  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 2  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
 
   ▸ Beam prompt #2  (train acc = 96.7%)
     🔍 Requesting 3 gradient feedbacks…
+
+    ┌─ Gradient 1 ─────────────────────────────────
+    │  it treats all polite, positive messages as Feedback and Suggestions, but messages asking about features or plans are General Information requests even if they're phrased positively.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 2 ─────────────────────────────────
+    │  it lacks class-level signal about billing disputes that mention system errors — if the root cause is a payment system bug the ticket is still Billing, not Technical Support, because the resolution path is the billing team.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 3 ─────────────────────────────────
+    │  it does not distinguish between tickets that contain both technical symptoms AND strong frustration language — those are Complaint and Escalations, not Technical Support, because the primary intent is escalation not debugging.
+    └────────────────────────────────────────────────────
+
     ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
-      Gradient 1, candidate 1: train acc = 93.3%
-      Gradient 1, candidate 2: train acc = 93.3%
-      Gradient 2, candidate 1: train acc = 100.0%
-      Gradient 2, candidate 2: train acc = 100.0%
-      Gradient 3, candidate 1: train acc = 93.3%
-      Gradient 3, candidate 2: train acc = 93.3%
+
+      ── Gradient 1 · Candidate 1  (train acc = 93.3%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 1 · Candidate 2  (train acc = 93.3%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 1  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 2  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 1  (train acc = 93.3%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 2  (train acc = 93.3%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
 
   ▸ Beam prompt #3  (train acc = 96.7%)
     ✅ No errors — skipping gradient step.
@@ -72,33 +502,450 @@ Respond with ONLY the class name, nothing else.
 
   ▸ Beam prompt #1  (train acc = 100.0%)
     🔍 Requesting 3 gradient feedbacks…
+
+    ┌─ Gradient 1 ─────────────────────────────────
+    │  it lacks class-level signal about billing disputes that mention system errors — if the root cause is a payment system bug the ticket is still Billing, not Technical Support, because the resolution path is the billing team.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 2 ─────────────────────────────────
+    │  it misses the escalation intent in messages that combine technical detail with demands for management contact, SLA breach mentions, or legal threats — those are unambiguous Complaint and Escalations regardless of technical content.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 3 ─────────────────────────────────
+    │  it does not handle complex enterprise tickets where multiple issues co-occur. The primary classification should follow the ticket's opening demand/complaint, not the longest technical paragraph.
+    └────────────────────────────────────────────────────
+
     ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
-      Gradient 1, candidate 1: train acc = 100.0%
-      Gradient 1, candidate 2: train acc = 100.0%
-      Gradient 2, candidate 1: train acc = 100.0%
-      Gradient 2, candidate 2: train acc = 96.7%
-      Gradient 3, candidate 1: train acc = 100.0%
-      Gradient 3, candidate 2: train acc = 96.7%
+
+      ── Gradient 1 · Candidate 1  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 1 · Candidate 2  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 1  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 2  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 1  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 2  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
 
   ▸ Beam prompt #2  (train acc = 96.7%)
     🔍 Requesting 3 gradient feedbacks…
+
+    ┌─ Gradient 1 ─────────────────────────────────
+    │  it misses the escalation intent in messages that combine technical detail with demands for management contact, SLA breach mentions, or legal threats — those are unambiguous Complaint and Escalations regardless of technical content.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 2 ─────────────────────────────────
+    │  it confuses General Information queries with Feedback and Suggestions when users phrase questions as implicit suggestions (e.g. 'Can you add X?'). Feedback implies the user is offering an opinion or improvement idea, while General Information is a neutral factual query.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 3 ─────────────────────────────────
+    │  it does not handle complex enterprise tickets where multiple issues co-occur. The primary classification should follow the ticket's opening demand/complaint, not the longest technical paragraph.
+    └────────────────────────────────────────────────────
+
     ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
-      Gradient 1, candidate 1: train acc = 96.7%
-      Gradient 1, candidate 2: train acc = 96.7%
-      Gradient 2, candidate 1: train acc = 100.0%
-      Gradient 2, candidate 2: train acc = 100.0%
-      Gradient 3, candidate 1: train acc = 93.3%
-      Gradient 3, candidate 2: train acc = 100.0%
+
+      ── Gradient 1 · Candidate 1  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 1 · Candidate 2  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 1  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 2  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 1  (train acc = 93.3%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 2  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
 
   ▸ Beam prompt #3  (train acc = 96.7%)
     🔍 Requesting 3 gradient feedbacks…
+
+    ┌─ Gradient 1 ─────────────────────────────────
+    │  it treats all polite, positive messages as Feedback and Suggestions, but messages asking about features or plans are General Information requests even if they're phrased positively.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 2 ─────────────────────────────────
+    │  it lacks class-level signal about billing disputes that mention system errors — if the root cause is a payment system bug the ticket is still Billing, not Technical Support, because the resolution path is the billing team.
+    └────────────────────────────────────────────────────
+
+    ┌─ Gradient 3 ─────────────────────────────────
+    │  it misses the escalation intent in messages that combine technical detail with demands for management contact, SLA breach mentions, or legal threats — those are unambiguous Complaint and Escalations regardless of technical content.
+    └────────────────────────────────────────────────────
+
     ✏️  Generating 6 candidate prompt(s) (2 per gradient)…
-      Gradient 1, candidate 1: train acc = 100.0%
-      Gradient 1, candidate 2: train acc = 96.7%
-      Gradient 2, candidate 1: train acc = 100.0%
-      Gradient 2, candidate 2: train acc = 100.0%
-      Gradient 3, candidate 1: train acc = 96.7%
-      Gradient 3, candidate 2: train acc = 100.0%
+
+      ── Gradient 1 · Candidate 1  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 1 · Candidate 2  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 1  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 2 · Candidate 2  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 1  (train acc = 96.7%) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
+
+      ── Gradient 3 · Candidate 2  (train acc = 100.0% ⭐) ──
+         # Task
+         Route the following customer support ticket to the correct team.
+         
+         # Teams and what they handle
+         | Team | Handle when... |
+         |------|---------------|
+         | Technical Support | System errors, bugs, crashes, authentication failures, slow performance, broken integrations |
+         | Billing | Payments, invoices, refunds, pricing, subscription changes, billing system errors |
+         | General Information | Factual questions about product features, policies, hours, plans |
+         | Complaint and Escalations | Anger, demands for management, legal threats, SLA violations, repeated unresolved issues |
+         | Feedback and Suggestions | Feature ideas, praise, UI feedback, improvement requests |
+         
+         # Key distinctions
+         - A billing system bug → **Billing** (not Technical Support)
+         - A ticket with both technical issues AND escalation language → **Complaint and Escalations**
+         - "Can you add X feature?" → **Feedback and Suggestions** (not General Information)
+         - "How does X work?" → **General Information** (not Feedback and Suggestions)
+         
+         Respond with ONLY the team name (class name) from the table above.
+
 
   🏆 Best prompt this round — train acc: 100.0%
   Preview: # Task…
