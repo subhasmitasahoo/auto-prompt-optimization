@@ -1,34 +1,101 @@
-# Auto Prompt Optimization
+# Auto Prompt Optimization (APO)
 
-## Algorithm with simple steps
-```
-Here's how Auto-Prompt Optimization works in simple steps:
-1. Start Simple
-   * Begin with a basic 2-line prompt
-   * Just include the task and class names (no detailed descriptions needed!)
-2. Iterate and Improve
-   * Test the initial prompt and measure accuracy
-   * Create a "gradient prompt" asking the model for improvement feedback
-   * Generate new prompt versions based on this feedback
-   * Test these new prompts and keep the best performers
-3. Repeat and Perfect
-   * Run multiple optimization rounds
-   * Select the highest-performing prompt
-```
-Refer to https://arxiv.org/pdf/2305.03495 for more details.
+Implementation of [*Automatic Prompt Optimization with "Gradient Descent" and Beam Search*](https://arxiv.org/pdf/2305.03495) (Pryzant et al., 2023).
 
-## Prompts
+APO automatically improves a zero-shot classifier prompt by iterating over training errors — no gradient descent, no fine-tuning, no GPU required. The optimizer **is** the LLM.
 
-### Sample initial prompt
+---
+
+## Table of Contents
+
+1. [How It Works](#how-it-works)
+2. [Prompt Templates](#prompt-templates)
+3. [Implementation](#implementation)
+4. [Data Format](#data-format)
+5. [Results](#results)
+6. [Exercises](#exercises)
+7. [Contributing](#contributing)
+
+---
+
+## How It Works
+
 ```
-#Task
-Categorize the custom support ticket.
+Step 1 — Start with a minimal seed prompt (2 lines)
+           Just the task description + class names. No descriptions.
+
+Step 2 — Evaluate
+           Run the prompt on a labelled training sample.
+           Collect every misclassified example.
+
+Step 3 — Gradient step
+           Show the wrong examples to a capable LLM and ask:
+           "Why did this prompt fail on these examples?"
+           → Returns N natural-language reasons (the "gradients").
+
+Step 4 — Edit step
+           For each gradient reason, ask the LLM:
+           "Rewrite the prompt to fix this failure."
+           → Returns M improved prompt candidates.
+
+Step 5 — Evaluate all candidates
+           Score every new prompt on the training sample.
+           Keep the top-K (beam search).
+
+Step 6 — Repeat from Step 2
+           Run for num_rounds. Select the best prompt.
+           Evaluate once on the held-out eval set.
+```
+
+### Key design choices
+
+| Choice | Reasoning |
+|---|---|
+| **Minimal seed prompt** | Gives the optimizer maximum room to improve. Starting with a rich prompt obscures which additions are actually useful. |
+| **Beam search over greedy** | A single gradient direction can produce a candidate that regresses. Keeping K prompts in parallel absorbs bad gradients without losing progress. |
+| **Two-model strategy** | Use a fast/cheap model (e.g. Haiku) for the hundreds of classification evaluations; use a capable model (e.g. Sonnet) only for gradient and edit steps. |
+| **Natural-language gradients** | Unlike numeric gradients, these are human-readable — each one is a legible explanation of a failure mode. |
+| **No few-shot examples in classifier** | APO optimizes the prompt itself; injecting examples would conflate prompt quality with example selection. |
+
+### Algorithm parameters
+
+| Parameter | What it controls |
+|---|---|
+| `num_rounds` | How many optimization iterations to run |
+| `beam_size` | Number of top prompts kept between rounds |
+| `num_feedbacks` | Gradient reasons requested per prompt per round |
+| `steps_per_gradient` | New prompt candidates generated per gradient reason |
+| `max_train_sample` | How many training examples evaluated per round (cap for speed) |
+
+**Candidates generated per round** = `beam_size × num_feedbacks × steps_per_gradient`
+
+With defaults (beam=3, feedbacks=3, steps=2): **18 candidates per round**.
+
+---
+
+## Prompt Templates
+
+### Seed prompt (start here)
+
+```
+# Task
+Categorize the customer support ticket.
 
 # Output format
-Classify into one of these classes: 'Technical Support', 'Billing', 'General information', 'Complaint and escalations', 'Feedback and suggestions'.
+Classify into one of these classes: 'Technical Support', 'Billing',
+'General Information', 'Complaint and Escalations', 'Feedback and Suggestions'.
+Respond with ONLY the class name, nothing else.
 ```
 
+Deliberately two lines. No class descriptions — APO will write them.
+
+---
+
 ### Gradient prompt template
+
+Sent to the **optimizer model** with the wrong examples filled in.
+Elicits natural-language reasons for the prompt's failures.
+
 ```
 I'm trying to write a zero-shot classifier prompt.
 My current prompt is:
@@ -41,7 +108,23 @@ Give {num_feedbacks} reasons why the prompt could have gotten these examples wro
 Wrap each reason with <START> and <END>
 ```
 
+**Parameters:**
+
+| Placeholder | Value |
+|---|---|
+| `{prompt}` | The current best prompt text |
+| `{error_string}` | Numbered list of misclassified examples: text, expected label, predicted label |
+| `{num_feedbacks}` | How many gradient reasons to request (default: 3) |
+
+**Output format:** One or more `<START>reason<END>` blocks. Parse with `re.findall(r"<START>(.*?)<END>", response, re.DOTALL)`.
+
+---
+
 ### Edit prompt template
+
+Sent to the **optimizer model** once per gradient reason.
+Generates improved prompt candidates that address the identified failure.
+
 ```
 I'm trying to write a zero-shot classifier.
 My current prompt is:
@@ -58,96 +141,358 @@ Each prompt should be wrapped with <START> and <END>.
 The {steps_per_gradient} new prompts are:
 ```
 
-## Sample Training/Eval data for a dry run
+**Parameters:**
+
+| Placeholder | Value |
+|---|---|
+| `{prompt}` | The current best prompt text |
+| `{error_str}` | Same misclassified examples as above |
+| `{gradient}` | One gradient reason string (from the gradient step) |
+| `{steps_per_gradient}` | How many improved prompts to generate (default: 2) |
+
+**Output format:** One or more `<START>improved_prompt<END>` blocks. Parse identically to the gradient step.
+
+---
+
+## Implementation
+
+The reference implementation is in [`customer-service-optimizer/`](customer-service-optimizer/).
+It applies APO to customer support ticket routing across 5 classes.
+
 ```
+customer-service-optimizer/
+├── data.py              # 75 labelled tickets: 60 train + 15 held-out eval
+├── prompts.py           # Seed prompt + gradient/edit templates
+├── optimizer.py         # APO core functions
+│   ├── classify()       #   Run one classification call
+│   ├── evaluate()       #   Score a prompt on a dataset → (accuracy, errors)
+│   ├── get_gradients()  #   Gradient step → list of reason strings
+│   ├── generate_new_prompts()  # Edit step → list of new prompt strings
+│   └── run_apo()        #   Full optimization loop
+├── main.py              # CLI entry point (--rounds, --beam, --dry-run, ...)
+├── simulate_run.py      # Deterministic mock runner — no API key needed
+├── simulation_output.txt   # Raw output from the simulation
+├── sample_outputs.md    # Annotated output: all gradients + edit prompts
+├── findings.md          # Analysis: what APO changed and why
+├── medium_post.md       # Write-up of the experiment
+└── requirements.txt     # anthropic>=0.40.0
+```
+
+### Core functions (`optimizer.py`)
+
+#### `classify(prompt, ticket) → str`
+
+Sends a single classification request to the classifier model. Includes response parsing: tries exact match, then substring match, then returns raw response.
+
+```python
+CLASSIFY_MODEL = "claude-haiku-4-5-20251001"   # fast + cheap
+
+def classify(prompt: str, ticket: str) -> str:
+    message = client.messages.create(
+        model=CLASSIFY_MODEL,
+        max_tokens=64,
+        messages=[{"role": "user", "content": f"{prompt}\n\nTicket: {ticket}"}],
+    )
+    return parse_prediction(message.content[0].text)
+```
+
+#### `evaluate(prompt, data) → (float, list[dict])`
+
+Evaluates a prompt against a full dataset. Returns accuracy and a list of error dicts (`text`, `expected`, `predicted`).
+
+```python
+def evaluate(prompt: str, data: List[Example]) -> Tuple[float, List[Dict]]:
+    correct, errors = 0, []
+    for example in data:
+        predicted = classify(prompt, example.text)
+        if predicted.lower() == example.label.lower():
+            correct += 1
+        else:
+            errors.append({"text": example.text,
+                           "expected": example.label,
+                           "predicted": predicted})
+    return correct / len(data), errors
+```
+
+#### `get_gradients(prompt, errors, num_feedbacks) → list[str]`
+
+Sends the gradient prompt to the optimizer model. Parses `<START>…<END>` blocks from the response.
+
+```python
+OPTIMIZE_MODEL = "claude-sonnet-4-6"
+
+def get_gradients(prompt, errors, num_feedbacks=3) -> List[str]:
+    gradient_query = GRADIENT_PROMPT_TEMPLATE.format(
+        prompt=prompt,
+        error_string=format_errors(errors),
+        num_feedbacks=num_feedbacks,
+    )
+    response = client.messages.create(model=OPTIMIZE_MODEL, ...).content[0].text
+    return [g.strip() for g in re.findall(r"<START>(.*?)<END>", response, re.DOTALL)]
+```
+
+#### `generate_new_prompts(prompt, errors, gradient, steps_per_gradient) → list[str]`
+
+Sends the edit prompt to the optimizer model. Returns up to `steps_per_gradient` new prompt strings.
+
+#### `run_apo(initial_prompt, train_data, eval_data, ...) → dict`
+
+The full loop. Returns `best_prompt`, `best_train_accuracy`, `best_eval_accuracy`, and `history`.
+
+```python
+result = run_apo(
+    initial_prompt     = INITIAL_PROMPT,
+    train_data         = TRAINING_DATA,
+    eval_data          = EVAL_DATA,
+    num_rounds         = 3,
+    beam_size          = 3,
+    steps_per_gradient = 2,
+    num_feedbacks      = 3,
+    max_train_sample   = 30,
+)
+```
+
+### Running it
+
+```bash
+cd customer-service-optimizer
+pip install -r requirements.txt
+
+# No API key — run the deterministic simulation
+python simulate_run.py
+
+# With API key — dry run (evaluate seed only, no optimization)
+export ANTHROPIC_API_KEY=sk-ant-...
+python main.py --dry-run
+
+# Full run
+python main.py --rounds 3 --beam 3
+
+# Save results to JSON
+python main.py --output results.json
+```
+
+---
+
+## Data Format
+
+Training and evaluation data are lists of `Example` dataclass instances:
+
+```python
+@dataclass
+class Example:
+    text: str    # the support ticket text
+    label: str   # one of the five class names
+```
+
+```python
 TRAINING_DATA = [
-        # Technical Support
-    Example("I can't log into my account, it keeps saying 'invalid credentials' even though I'm sure my password is correct.", "Technical Support"),
-    Example("The app keeps crashing whenever I try to upload a photo. I'm using the latest iPhone version.", "Technical Support"),
-    Example("My dashboard isn't showing any of my recent activity from the past week. Is there a system issue?", "Technical Support"),
-    Example("The export function isn't working - when I click 'download report' nothing happens.", "Technical Support"),
-    Example("Getting a 404 error when trying to access my profile settings. Please help!", "Technical Support"),
-    Example("The sync feature between my mobile and desktop isn't working properly.", "Technical Support"),
-    Example("I'm unable to reset my two-factor authentication because I lost my phone.", "Technical Support"),
-    Example("The website is extremely slow and takes forever to load my inventory page.", "Technical Support"),
-    Example("I keep getting logged out every few minutes, even when I check 'remember me'.", "Technical Support"),
-    Example("Can't seem to connect my Google Calendar to the platform. Getting an integration error.", "Technical Support"),
-    Example("My dual-monitor setup suddenly stopped working after the latest software update v2.3.5. The primary display works fine at 4K resolution, but the secondary monitor shows artifacts and flickers when I try to drag windows across. I've already tried updating my graphics drivers and rolling back the update.", "Technical Support"),
-    Example("We're experiencing intermittent connectivity issues with the API integration between your platform and our custom CRM system. The error logs show timeout exceptions occurring specifically during high-traffic periods (2000+ simultaneous requests), but only when executing complex queries with multiple JOIN operations.", "Technical Support"),
-    Example("After migrating our database from PostgreSQL 12 to 13, the real-time analytics dashboard is showing inconsistent data. The discrepancy seems to affect only aggregated metrics from the last 30 days, while historical data and raw data views appear correct.", "Technical Support"),
-    Example("The automated backup system is creating corrupted incremental backups when the file size exceeds 2GB. We've noticed this happens specifically with files containing special characters in their names and when the backup process coincides with our nightly maintenance window.", "Technical Support"),
-    Example("Since implementing the SSO integration with Okta, users from our European offices are experiencing 20-30 second delays during authentication, but only when accessing through our VPN. The same setup works instantly for our US-based employees.", "Technical Support"),
+    # Technical Support
+    Example("I can't log into my account, it keeps saying 'invalid credentials'...", "Technical Support"),
+    Example("The app keeps crashing whenever I try to upload a photo...", "Technical Support"),
+    # ... 13 more Technical Support examples
 
     # Billing
-    Example("I was charged twice for my monthly subscription. Please refund the extra payment.", "Billing"),
-    Example("When will my refund for order #45789 be processed? It's been 5 days.", "Billing"),
-    Example("I need to update my credit card information for automatic payments.", "Billing"),
-    Example("Can you explain the charges on my latest invoice? There's an item I don't recognize.", "Billing"),
-    Example("I cancelled my subscription but was still charged this month.", "Billing"),
-    Example("Need a copy of all my invoices from the last financial year for tax purposes.", "Billing"),
-    Example("The system won't accept my new debit card, keeps saying invalid card number.", "Billing"),
-    Example("I was promised a discount but it wasn't applied to my last bill.", "Billing"),
-    Example("How do I change my billing cycle from monthly to annual?", "Billing"),
-    Example("Need to update the billing address on my account for tax purposes.", "Billing"),
-    Example("Our organization recently underwent a merger, and we need to consolidate billing for 3 separate enterprise accounts (IDs: #ERF456, #ERF789, #ERF012) while maintaining separate usage analytics and access controls. We also need to ensure compliance with both EU and US tax regulations.", "Billing"),
-    Example("There appears to be a discrepancy in the usage-based billing calculation for our API calls. According to our internal monitoring, we made 2.3M calls last month, but we're being charged for 2.8M. We need a detailed breakdown of the calculation methodology and timestamp-level access logs for reconciliation.", "Billing"),
-    Example("We've been grandfathered into a custom enterprise plan from 2019 ($50k/year) but noticed that the latest invoice reflects the current market rate ($75k/year). Our contract (ref: ENTX-2019-443) specifically includes a 5-year price lock guarantee with a maximum 3% annual increase.", "Billing"),
-    Example("Need to implement a complex departmental billing structure where R&D expenses are split 70/30 between two cost centers, marketing is billed to three different regions based on usage patterns, and admin costs need to be amortized across all departments using a custom formula.", "Billing"),
-    Example("We're transitioning from a corporate credit card to ACH payments mid-billing cycle while simultaneously switching from monthly to quarterly billing. Need to ensure this won't affect our pre-negotiated volume discounts or interrupt service to our 1500+ users.", "Billing"),
-        
+    Example("I was charged twice for my monthly subscription...", "Billing"),
+    # ... 14 more Billing examples
+
     # General Information
     Example("What are your business hours during the holiday season?", "General Information"),
-    Example("Can you tell me more about your enterprise plan features?", "General Information"),
-    Example("Do you offer student discounts on your premium packages?", "General Information"),
-    Example("What's the typical processing time for standard shipping?", "General Information"),
-    Example("Are your products available for international shipping?", "General Information"),
-    Example("Could you explain how the reward points system works?", "General Information"),
-    Example("What file formats do you support for uploads?", "General Information"),
-    Example("Do you have any upcoming maintenance schedules?", "General Information"),
-    Example("What's the maximum file size limit for attachments?", "General Information"),
-    Example("Can you explain the difference between your basic and premium plans?", "General Information"),
-    Example("Could you provide detailed documentation about your platform's compliance with GDPR, CCPA, HIPAA, and SOC 2 Type II requirements? We specifically need information about data residency options for our APAC clients and your roadmap for upcoming ISO 27701 certification.", "General Information"),
-    Example("What are the exact specifications and limitations of your API rate limiting system? We're particularly interested in understanding how concurrent request handling differs between your various enterprise tiers, and whether these limits are adjustable for specific endpoints or time windows.", "General Information"),
-    Example("Can you explain the architectural differences between your multi-region deployment options? We need to understand the implications for data replication latency, failover mechanisms, and how this affects our SLA, particularly for our real-time processing requirements.", "General Information"),
-    Example("What's your disaster recovery protocol for scenarios involving cascading failures across multiple availability zones? We need details about your RPO and RTO guarantees, especially regarding the preservation of transactional data integrity during forced failovers.", "General Information"),
-    Example("Could you break down the environmental impact metrics of using your cloud services versus on-premise solutions? We need this information for our annual sustainability report, specifically focusing on power usage effectiveness (PUE) and carbon offset programs.", "General Information"),
-    
+    # ... 14 more General Information examples
+
     # Complaint and Escalations
-    Example("I've been trying to resolve this issue for weeks and no one is helping. I want to speak to a supervisor.", "Complaint and Escalations"),
-    Example("This is the third time I'm reporting this bug and it's affecting my business operations. Urgent resolution needed!", "Complaint and Escalations"),
-    Example("Your support team has been extremely unhelpful and I'm considering canceling my subscription.", "Complaint and Escalations"),
-    Example("I demand immediate attention to this issue as it's causing significant financial loss to my company.", "Complaint and Escalations"),
-    Example("This is unacceptable! I've been waiting for 2 hours on hold and no one has picked up.", "Complaint and Escalations"),
-    Example("I want to file a formal complaint about your service quality in the past month.", "Complaint and Escalations"),
-    Example("Your product is not delivering what was promised during sales. I need this escalated immediately.", "Complaint and Escalations"),
-    Example("Multiple failed attempts to resolve this - requesting urgent escalation to management.", "Complaint and Escalations"),
-    Example("The level of service I've received is completely below standard. Need management intervention.", "Complaint and Escalations"),
-    Example("This is my final attempt to resolve this before involving consumer protection services.", "Complaint and Escalations"),
-    Example("This is absolutely unacceptable! We've experienced 4 critical outages in the past month, each lasting over 3 hours, causing us to miss our SLA commitments to our tier-1 clients. We've documented $375,000 in lost revenue, and your standard compensation offer of 10% credit is insulting. I need to speak with your Chief Operating Officer immediately.", "Complaint and Escalations"),
-    Example("I've spent 47 hours over the past two weeks working with 12 different support representatives, none of whom seem to understand the severity of our authentication system failure. This has forced us to manually provision access for 3,000+ employees, violating our security protocols. If this isn't resolved by end of day, we'll be forced to initiate legal proceedings.", "Complaint and Escalations"),
-    Example("Your latest 'enhanced' security update has completely broken our mission-critical automated workflow systems that we spent 8 months building based on your API documentation. Despite 5 escalations and 2 conference calls with your technical team, we're still without a resolution or even a proper explanation. This is severely damaging our reputation with our clients.", "Complaint and Escalations"),
-    Example("We were promised enterprise-grade support with a 15-minute response time for critical issues, yet we've been waiting for 72 hours for a response to a severity-1 ticket about database corruption. Our entire EMEA operation is at a standstill, affecting 140,000 end-users. This is a breach of contract and we're documenting all losses.", "Complaint and Escalations"),
-    Example("After migrating our entire infrastructure to your platform based on promises made during the sales process, we've discovered that half of the promised features either don't exist or are 'coming soon'. We've invested $2.3M in this migration and need immediate resolution or we'll be forced to pursue all available legal remedies while publicly documenting our experience.", "Complaint and Escalations"),
-        
+    Example("I've been trying to resolve this issue for weeks...", "Complaint and Escalations"),
+    # ... 14 more Complaint and Escalations examples
+
     # Feedback and Suggestions
-    Example("It would be great if you could add a dark mode option to the dashboard.", "Feedback and Suggestions"),
-    Example("Consider adding bulk upload functionality - it would save us a lot of time.", "Feedback and Suggestions"),
-    Example("The new UI is much better, but the search function could be more prominent.", "Feedback and Suggestions"),
-    Example("Your customer service team was excellent today, especially Sarah who helped me.", "Feedback and Suggestions"),
-    Example("A mobile app would make your service much more accessible and convenient.", "Feedback and Suggestions"),
-    Example("The latest update has made the platform much faster - great improvement!", "Feedback and Suggestions"),
-    Example("Would love to see integration with more third-party tools in the future.", "Feedback and Suggestions"),
-    Example("The new reporting feature is fantastic, but could use more export options.", "Feedback and Suggestions"),
-    Example("Your onboarding process was smooth, but a video tutorial would be helpful.", "Feedback and Suggestions"),
-    Example("Really appreciate the recent changes to the notification system - much clearer now.", "Feedback and Suggestions"),
-    Example("The recent implementation of WebAuthn for passwordless authentication is a step in the right direction, but it could be significantly improved by adding conditional step-up authentication for high-risk operations and integration with hardware security keys. Also, consider adding biometric authentication options for mobile users with detection of device integrity status.", "Feedback and Suggestions"),
-    Example("While your GraphQL API is powerful, the developer experience could be enhanced by implementing real-time subscription support for certain endpoints, adding field-level performance metrics, and providing better tooling for query optimization. The current playground lacks important features like query persistence and team sharing capabilities.", "Feedback and Suggestions"),
-    Example("Your kubernetes operator is quite robust, but would benefit from adding support for custom resource definitions that allow for more granular control over pod scaling behaviors. Additionally, implementing automatic certificate rotation and secret management integration would significantly improve the security posture.", "Feedback and Suggestions"),
-    Example("The analytics dashboard is comprehensive, but could be improved by adding support for custom retention cohort analysis with multiple attribution models. It would also be beneficial to have the ability to create custom metrics using a SQL-like interface and schedule automated exports with dynamic parameters.", "Feedback and Suggestions"),
-    Example("Your machine learning pipeline integration is promising, but needs better support for A/B testing frameworks, automated model retraining triggers based on drift detection, and more sophisticated feature store capabilities. Consider adding integration with popular ML ops tools and support for distributed training across multiple zones.", "Feedback and Suggestions")
+    Example("It would be great if you could add a dark mode option...", "Feedback and Suggestions"),
+    # ... 14 more Feedback and Suggestions examples
 ]
 ```
 
-## Code
-I think you should give it a try using the shared algorithm, prompt templates and data, so not sharing any code! 
-Please feel free to add a comment if you have any questions on implementation, I will try my best to help you on this.
+The full dataset (75 examples) is in [`customer-service-optimizer/data.py`](customer-service-optimizer/data.py).
+
+**Data split:** 60 training / 15 held-out evaluation (3 per class for eval, never used during optimization).
+
+**Ticket complexity:** Each class contains both short simple tickets (single-issue, consumer-level) and long complex ones (multi-issue, enterprise-level). Complex tickets are the hard cases APO is especially good at, because they often span multiple class boundaries.
+
+---
+
+## Results
+
+Run on the customer support classifier (3 rounds, beam=3, 30-ticket sample):
+
+| Stage | Train acc | Eval acc | Notes |
+|---|---|---|---|
+| Seed | 90.0% | — | All errors on General Info ↔ Feedback boundary |
+| Round 1 | 96.7% | — | Gradient fixed intent distinction |
+| Round 2 | **100.0%** | — | Convergence |
+| Round 3 | 100.0% | — | No candidate improved on best; early-stop signal |
+| **Final** | **100.0%** | **100.0%** | 0 errors on 15 held-out tickets |
+
+**What the optimizer added** (none of this was in the seed):
+
+- Explicit trigger-condition table per class
+- Task reframed from "categorize" → "route to the correct **team**"
+- Billing system bugs → Billing (not Technical Support)
+- Escalation intent overrides Technical Support classification
+- Suggestions are opinions; information requests are neutral queries
+
+Full output with all gradient strings and generated prompts: [`sample_outputs.md`](customer-service-optimizer/sample_outputs.md)
+
+---
+
+## Exercises
+
+These are open tasks for anyone wanting to experiment with APO, build on the implementation, or contribute back to the repo. They range from quick experiments to full new modules.
+
+Tasks marked **[contribute]** are good PR candidates — see [Contributing](#contributing) for guidelines.
+
+---
+
+### Beginner
+
+**E1 — Try a different seed prompt** *(no code changes)*
+Run `main.py --dry-run` with a more detailed seed: add class descriptions yourself before running APO. Does APO still improve it? Does it converge faster or reach a higher ceiling?
+
+**E2 — Vary the beam size** *(CLI only)*
+Compare `--beam 1` (greedy) vs `--beam 3` (default) vs `--beam 5` across 3 rounds. Does a wider beam consistently find better prompts, or do returns diminish quickly?
+
+**E3 — Vary the number of feedbacks** *(CLI only)*
+Try `--feedbacks 1`, `--feedbacks 3`, `--feedbacks 5`. Plot the best candidate score per round. Do more gradient reasons produce meaningfully different prompts, or do they converge to the same insights?
+
+---
+
+### Intermediate
+
+**E4 — Add 15 more training examples per class** **[contribute]**
+The current dataset has 15 examples per class (12 train + 3 eval). Add 15 more to `data.py` — your own original tickets, not copies of existing ones. Focus on edge cases: tickets that could belong to two classes, highly technical tickets, very short tickets, non-native English speaker style. Run APO with `--max-train-sample 0` and compare results.
+
+*Guidelines for new data: see [Contributing → Adding training examples](#adding-training-examples).*
+
+**E5 — Implement early stopping** **[contribute]**
+Add a flag `--early-stop` to `main.py` and `run_apo()`. If no candidate in a round beats the current best prompt accuracy, stop and return. Report how many rounds were saved vs. the default run.
+
+**E6 — Add a new domain** **[contribute]**
+Create a new subdirectory (e.g. `ecommerce-optimizer/` or `hr-tickets-optimizer/`) following the same module structure as `customer-service-optimizer/`. Define 4–6 classes, write 50+ labelled examples, and run APO on it. Document what the optimizer changed and why in a `findings.md`.
+
+*See [Contributing → Adding a new domain](#adding-a-new-domain) for structure requirements.*
+
+**E7 — Log all beam prompts per round**
+Modify `run_apo()` to return (and optionally save) all prompts in the beam at each round, not just the best. Visualise how the beam converges. Do all K prompts end up very similar by round 3, or does diversity remain?
+
+**E8 — Test on out-of-distribution tickets**
+Write 10 tickets that deliberately don't fit any class cleanly (e.g. a ticket that is simultaneously a technical bug report, a billing complaint, and an escalation). Run both the seed and the final optimized prompt on them. Does APO's reframing help or hurt on truly ambiguous inputs?
+
+---
+
+### Advanced
+
+**E9 — Multi-label APO** **[contribute]**
+The current setup is single-label classification (one class per ticket). Some tickets genuinely span two categories. Modify the classifier to output a primary and optional secondary class, update the evaluation metric accordingly (e.g. partial credit), and re-run APO. Does the gradient step naturally suggest multi-label improvements?
+
+**E10 — APO with a smaller model**
+Replace `OPTIMIZE_MODEL` (currently Sonnet) with Haiku for the gradient and edit steps too. Does the optimizer still produce useful gradient feedback with a smaller model? How does accuracy at convergence compare? Useful for cost-sensitive deployments.
+
+**E11 — Implement confidence-weighted evaluation**
+Instead of binary correct/wrong, weight errors by model confidence (using logprobs if available, or asking the model to rate its own certainty). Feed only high-confidence wrong predictions to the gradient step — the hypothesis is that low-confidence misclassifications are inherently ambiguous and produce noisy gradients.
+
+**E12 — APO for a regression task**
+The paper focuses on classification. Adapt the optimizer for a scoring task — e.g. ticket urgency on a 1–5 scale. The gradient step needs to reason about *direction* of error (scored too high vs too low), not just wrong/right. Redefine the error string format and evaluate with MAE instead of accuracy.
+
+---
+
+## Contributing
+
+Contributions are welcome. The most useful contributions are:
+
+1. **New training examples** for the existing customer support dataset
+2. **New domain modules** (new task + dataset + findings)
+3. **Algorithm improvements** (early stopping, confidence weighting, etc.)
+4. **Bug fixes and clarity improvements** to existing code
+
+---
+
+### General guidelines
+
+- All code should be runnable with `python simulate_run.py` (no API key) for reviewers who don't have access
+- If you add a live API run, also add or update a `simulate_run.py` with a deterministic mock
+- No new dependencies beyond `anthropic` unless essential and justified in the PR description
+- Follow the existing file naming convention: `data.py`, `prompts.py`, `optimizer.py`, `main.py`
+
+---
+
+### Adding training examples
+
+When adding to `data.py`:
+
+```python
+# Good — original, specific, plausible
+Example("My two-factor authentication stopped working after I got a new phone number. I can still receive SMS but the app says the code is invalid.", "Technical Support")
+
+# Avoid — vague, too short to be informative
+Example("The thing isn't working.", "Technical Support")
+
+# Avoid — near-duplicate of an existing example
+Example("I cannot log into my account due to invalid password.", "Technical Support")  # too similar to existing
+```
+
+**Checklist for new examples:**
+- [ ] Original text — not copied or lightly paraphrased from existing examples
+- [ ] Clear label — if you're unsure which class it belongs to, it's probably a good edge-case example; add a comment explaining your reasoning
+- [ ] Realistic language — write as a real user would, not as a data labeller
+- [ ] Mix of lengths — include both short (1–2 sentences) and long (3–5 sentences) tickets
+- [ ] No PII — no real names, emails, account numbers, or company names
+- [ ] Add to both `TRAINING_DATA` (for optimization) and consider adding 1 per class to `EVAL_DATA` (held-out)
+
+---
+
+### Adding a new domain
+
+Create a subdirectory named `<domain>-optimizer/` with this structure:
+
+```
+<domain>-optimizer/
+├── data.py          # Example dataclass + TRAINING_DATA + EVAL_DATA + CLASSES list
+├── prompts.py       # INITIAL_PROMPT + GRADIENT_PROMPT_TEMPLATE + EDIT_PROMPT_TEMPLATE
+├── optimizer.py     # Copy from customer-service-optimizer/ — update CLASSES reference
+├── main.py          # Copy from customer-service-optimizer/ — update description string
+├── simulate_run.py  # Mock runner with domain-specific confusion matrix
+├── requirements.txt # anthropic>=0.40.0
+├── findings.md      # What APO changed, accuracy progression, interesting observations
+└── README.md        # Problem statement, classes, quickstart, results
+```
+
+**Minimum data requirements:**
+- At least 4 classes
+- At least 10 training examples per class (15+ recommended)
+- At least 3 evaluation examples per class (held-out, never used in optimization)
+- At least one "complex" example per class (multi-sentence, edge-case, or ambiguous)
+
+**Domain ideas:**
+- E-commerce order issues (Shipping, Returns, Payment, Product Quality, Account)
+- HR ticket triage (Leave Request, IT Access, Payroll, Policy Question, Complaint)
+- Developer support (Bug Report, Feature Request, Documentation, Integration Help, Account)
+- Healthcare patient portal (Appointment, Prescription, Billing, Test Results, General)
+- Legal intake (Contract Review, IP, Employment, Litigation, General Inquiry)
+
+---
+
+### Submitting a PR
+
+1. Fork the repo and create a branch named `<your-name>/<short-description>`
+2. Make your changes — code + data + `simulate_run.py` + `findings.md`
+3. Run `python simulate_run.py` and confirm it exits cleanly
+4. Open a PR with:
+   - A one-sentence description of what you added or changed
+   - Accuracy before/after (if you modified the algorithm or data)
+   - Any interesting observations from your run
+
+---
+
+## References
+
+- Pryzant et al. (2023) — *Automatic Prompt Optimization with "Gradient Descent" and Beam Search* — https://arxiv.org/pdf/2305.03495
+- Reference implementation write-up — [`customer-service-optimizer/medium_post.md`](customer-service-optimizer/medium_post.md)
+- Full run output with gradient strings — [`customer-service-optimizer/sample_outputs.md`](customer-service-optimizer/sample_outputs.md)
+- Detailed findings — [`customer-service-optimizer/findings.md`](customer-service-optimizer/findings.md)
